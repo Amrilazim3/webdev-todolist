@@ -1,9 +1,11 @@
 <?php
 
-use GuzzleHttp\Psr7\Request;
+use App\Models\Todo;
 use Illuminate\Foundation\Application;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use Termwind\Components\Raw;
 
 /*
 |--------------------------------------------------------------------------
@@ -31,10 +33,55 @@ Route::middleware([
     'verified',
 ])->group(function () {
     Route::get('/dashboard', function () {
-        return Inertia::render('Dashboard');
+        $todos = Todo::select(['id', 'user_id', 'task', 'is_completed'])
+            ->where('user_id', auth()->user()->id)
+            ->get();
+
+        return Inertia::render('Dashboard', [
+            'todos' => $todos
+        ])
+            ->with('jetstream.flash.banner', session()->get('jetstream.flash.banner'))
+            ->with('jetstream.flash.bannerStyle', session()->get('jetstream.flash.bannerStyle'));;
     })->name('dashboard');
 
     Route::post('dashboard', function (Request $request) {
-    
+        $request->validate([
+            'task' => ['required']
+        ]);
+
+        $user = $request->user();
+
+        Todo::create([
+            'user_id' => $user->id,
+            'task' => $request->task,
+        ]);
+
+        $request->session()->flash('jetstream.flash.banner', 'New todo added.');
+        $request->session()->flash('jetstream.flash.bannerStyle', 'success');
+
+        return redirect()->route('dashboard');
     })->name('dashboard.post');
+
+    Route::delete('dashboard/{todo}', function (Todo $todo, Request $request) {
+        $todo->delete();
+
+        $request->session()->flash('jetstream.flash.banner', 'Task deleted.');
+        $request->session()->flash('jetstream.flash.bannerStyle', 'success');
+
+        return redirect()->route('dashboard');
+    });
+
+    Route::patch('dashboard/{todo}', function (Todo $todo, Request $request) {
+        if ($request->isCompleted) {
+            $todo->update([
+                'is_completed' => false
+            ]);
+        } else {
+            $todo->update([
+                'is_completed' => true
+            ]);
+        }
+
+        return redirect()->route('dashboard');
+    });
 });
